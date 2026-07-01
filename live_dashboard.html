@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Live Monitor — Weather &amp; Crypto</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0F1720; --panel:#161F2B; --line:#28323F; --ink:#E9EDF2; --ink-soft:#8A96A3;
+    --accent:#5FD3A6; --accent2:#E0A458; --bad:#E0715F; --good:#5FD3A6;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1300px;margin:0 auto;padding:26px 30px 60px;}
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:32px;margin:0;}
+  .subtitle{color:var(--ink-soft);font-size:13px;margin-top:4px;max-width:520px;}
+  .status{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);text-align:right;}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:6px;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  .controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;align-items:flex-end;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);}
+  input, select{
+    background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    padding:8px 10px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;
+  }
+  button{
+    font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.04em;
+    background:var(--accent);color:#0F1720;border:none;padding:9px 16px;
+    cursor:pointer;font-weight:600;
+  }
+  button:hover{opacity:.85;}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--ink);}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+  .panel{background:var(--panel);border:1px solid var(--line);padding:18px 20px;}
+  .panel h4{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 14px;}
+
+  .weather-main{display:flex;align-items:baseline;gap:14px;}
+  .temp{font-family:'Fraunces',serif;font-size:52px;font-weight:600;}
+  .loc{font-size:14px;color:var(--ink-soft);}
+  .metrics{display:flex;gap:22px;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .metrics b{color:var(--ink);}
+
+  .coin-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);}
+  .coin-row:last-child{border-bottom:none;}
+  .coin-name{font-weight:600;text-transform:capitalize;}
+  .coin-price{font-family:'IBM Plex Mono',monospace;font-size:15px;}
+  .coin-change{font-family:'IBM Plex Mono',monospace;font-size:12px;padding:2px 7px;}
+  .coin-change.up{color:var(--good);} .coin-change.down{color:var(--bad);}
+
+  .alert-banner{
+    display:none;background:rgba(224,113,95,0.15);border:1px solid var(--bad);
+    color:var(--bad);padding:10px 14px;font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;margin-bottom:16px;
+  }
+  .alert-banner.show{display:block;}
+  .footer-note{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin-top:6px;}
+  .error-msg{color:var(--bad);font-family:'IBM Plex Mono',monospace;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Project 3 — Live Monitoring</div>
+      <h1>Real-Time Data Monitor</h1>
+      <div class="subtitle">Live weather and cryptocurrency data, fetched directly from public APIs in your browser and refreshed automatically.</div>
+    </div>
+    <div class="status"><span class="dot"></span>Live &nbsp;·&nbsp; <span id="lastUpdate">connecting…</span></div>
+  </header>
+
+  <div class="controls">
+    <div class="field">
+      <label>City (weather)</label>
+      <input id="cityInput" value="Gurugram" />
+    </div>
+    <div class="field">
+      <label>Coins (comma-separated)</label>
+      <input id="coinInput" value="bitcoin,ethereum,solana" style="width:220px;" />
+    </div>
+    <div class="field">
+      <label>Refresh every</label>
+      <select id="refreshSelect">
+        <option value="15">15s</option>
+        <option value="30" selected>30s</option>
+        <option value="60">60s</option>
+        <option value="120">2min</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Alert if BTC crosses ($)</label>
+      <input id="alertInput" type="number" placeholder="e.g. 70000" style="width:130px;" />
+    </div>
+    <button id="applyBtn">Apply &amp; Refresh</button>
+    <button class="ghost" id="pauseBtn">Pause</button>
+  </div>
+
+  <div class="alert-banner" id="alertBanner"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h4>Current Weather</h4>
+      <div id="weatherBody">Loading…</div>
+    </div>
+    <div class="panel">
+      <h4>Crypto Prices (USD)</h4>
+      <div id="cryptoBody">Loading…</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h4>Bitcoin — Session Price History</h4>
+    <canvas id="btcChart" height="90"></canvas>
+    <div class="footer-note">Tracks price at each refresh since this page was opened. Data: Open-Meteo &amp; CoinGecko public APIs.</div>
+  </div>
+</div>
+
+<script>
+let refreshTimer = null;
+let paused = false;
+let btcHistory = { labels: [], data: [] };
+let btcChart = null;
+
+function setStatus(msg){ document.getElementById('lastUpdate').textContent = msg; }
+
+async function fetchWeather(city){
+  const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`).then(r=>r.json());
+  if(!geo.results || !geo.results.length) throw new Error('City not found');
+  const loc = geo.results[0];
+  const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`).then(r=>r.json());
+  return {
+    city: loc.name, country: loc.country || '',
+    temp: w.current.temperature_2m, humidity: w.current.relative_humidity_2m,
+    wind: w.current.wind_speed_10m, time: w.current.time
+  };
+}
+
+async function fetchCrypto(ids){
+  const idStr = ids.join(',');
+  const data = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${idStr}&vs_currencies=usd&include_24hr_change=true`).then(r=>r.json());
+  return Object.entries(data).map(([coin, v]) => ({
+    coin, price: v.usd, change: v.usd_24h_change ? v.usd_24h_change.toFixed(2) : '0.00'
+  }));
+}
+
+function renderWeather(w){
+  document.getElementById('weatherBody').innerHTML = `
+    <div class="weather-main">
+      <div class="temp">${w.temp}°C</div>
+      <div class="loc">${w.city}${w.country ? ', '+w.country : ''}</div>
+    </div>
+    <div class="metrics">
+      <div>Humidity <b>${w.humidity}%</b></div>
+      <div>Wind <b>${w.wind} km/h</b></div>
+    </div>`;
+}
+
+function renderCrypto(rows){
+  document.getElementById('cryptoBody').innerHTML = rows.map(r=>`
+    <div class="coin-row">
+      <div class="coin-name">${r.coin}</div>
+      <div style="text-align:right;">
+        <div class="coin-price">$${Number(r.price).toLocaleString(undefined,{maximumFractionDigits:2})}</div>
+        <div class="coin-change ${r.change>=0?'up':'down'}">${r.change>=0?'▲':'▼'} ${Math.abs(r.change)}% (24h)</div>
+      </div>
+    </div>`).join('');
+
+  const btc = rows.find(r=>r.coin==='bitcoin');
+  const alertVal = parseFloat(document.getElementById('alertInput').value);
+  const banner = document.getElementById('alertBanner');
+  if(btc && alertVal && btc.price >= alertVal){
+    banner.textContent = `ALERT: Bitcoin price $${btc.price.toLocaleString()} has crossed your threshold of $${alertVal.toLocaleString()}`;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+
+  if(btc){
+    const t = new Date().toLocaleTimeString();
+    btcHistory.labels.push(t);
+    btcHistory.data.push(btc.price);
+    if(btcHistory.labels.length > 30){ btcHistory.labels.shift(); btcHistory.data.shift(); }
+    if(!btcChart){
+      btcChart = new Chart(document.getElementById('btcChart'), {
+        type:'line',
+        data:{ labels: btcHistory.labels, datasets:[{ label:'BTC/USD', data: btcHistory.data, borderColor:'#5FD3A6', backgroundColor:'rgba(95,211,166,0.08)', fill:true, tension:0.3, pointRadius:2 }]},
+        options:{ plugins:{legend:{labels:{color:'#8A96A3', font:{family:'IBM Plex Mono',size:10}}}},
+          scales:{ x:{ticks:{color:'#8A96A3', font:{size:9}}, grid:{color:'#28323F'}}, y:{ticks:{color:'#8A96A3', font:{size:9}}, grid:{color:'#28323F'}} } }
+      });
+    } else {
+      btcChart.update();
+    }
+  }
+}
+
+async function refreshAll(){
+  const city = document.getElementById('cityInput').value.trim() || 'Gurugram';
+  const coins = document.getElementById('coinInput').value.split(',').map(s=>s.trim()).filter(Boolean);
+  setStatus('updating…');
+  try{
+    const [w, c] = await Promise.all([fetchWeather(city), fetchCrypto(coins)]);
+    renderWeather(w);
+    renderCrypto(c);
+    setStatus('updated ' + new Date().toLocaleTimeString());
+  } catch(e){
+    setStatus('error — retrying next cycle');
+    console.error(e);
+  }
+}
+
+function scheduleRefresh(){
+  if(refreshTimer) clearInterval(refreshTimer);
+  const secs = parseInt(document.getElementById('refreshSelect').value, 10);
+  refreshTimer = setInterval(()=>{ if(!paused) refreshAll(); }, secs*1000);
+}
+
+document.getElementById('applyBtn').onclick = () => { refreshAll(); scheduleRefresh(); };
+document.getElementById('pauseBtn').onclick = (e) => {
+  paused = !paused;
+  e.target.textContent = paused ? 'Resume' : 'Pause';
+  setStatus(paused ? 'paused' : 'live');
+};
+
+refreshAll();
+scheduleRefresh();
+</script>
+</body>
+</html>
